@@ -1,0 +1,98 @@
+version: '3'
+services:
+  freeswitch:
+    image: safarov/freeswitch:latest
+    platform: linux/amd64
+    ports:
+      - "5060:5060/udp"    # SIP signaling
+      - "5080:5080/udp"    # SIP signaling (alternative)
+      - "8021:8021"        # Event Socket for LiveKit
+      - "30000-30010:30000-30010/udp"  # RTP media ports
+    volumes:
+      - ./freeswitch-config:/etc/freeswitch
+    environment:
+      - SOUND_RATES=8000,16000
+      - SOUND_TYPES=wav
+      - FREESWITCH_LOG_LEVEL=INFO
+      # FreeSWITCH Configuration
+      - FREESWITCH_DEFAULT_PASSWORD=${FREESWITCH_DEFAULT_PASSWORD}
+      - FREESWITCH_DOMAIN=${FREESWITCH_DOMAIN}
+      - FREESWITCH_HOLD_MUSIC=${FREESWITCH_HOLD_MUSIC}
+      - RESTAURANT_NAME=${RESTAURANT_NAME}
+      - FREESWITCH_EXTERNAL_RTP_PORT_MIN=30000
+      - FREESWITCH_EXTERNAL_RTP_PORT_MAX=30010
+      - RESTAURANT_PHONE_NUMBER=${RESTAURANT_PHONE_NUMBER}
+      # LiveKit Configuration
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      # SIP Provider Configuration
+      - SIP_USERNAME=${SIP_USERNAME}
+      - SIP_PASSWORD=${SIP_PASSWORD}
+      - SIP_REALM=${SIP_REALM}
+      - SIP_PROXY=${SIP_PROXY}
+    networks:
+      - restaurant-net
+    privileged: true
+    cap_add:
+      - SYS_NICE
+    depends_on:
+      - livekit
+  
+  # LiveKit server for media processing
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"   # WebSocket
+      - "7881:7881"   # WebSocket with TLS  
+      - "7882:7882/udp"  # TURN/UDP
+      - "16384-16394/udp"
+    volumes:
+      - ./livekit-config.yaml:/etc/livekit.yaml:ro
+    command: --config /etc/livekit.yaml
+    networks:
+      - restaurant-net
+
+  # Restaurant AI Assistant (your app)
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+      - "8081:8081"
+    volumes:
+      - .:/app
+      - ./service.json:/app/service.json
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY}
+      - CARTESIA_VOICE_ID=${CARTESIA_VOICE_ID}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/service.json
+      # LiveKit connection
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+    networks:
+      - restaurant-net
+    depends_on:
+      - livekit
+      - freeswitch
+    command: python main.py dev
+
+  # Menu management service
+  menu-seeder:
+    build: .
+    volumes:
+      - .:/app
+      - ./service.json:/app/service.json
+    environment:
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/service.json
+    networks:
+      - restaurant-net
+    profiles:
+      - tools
+    command: python scripts/quick_seed.py
+
+networks:
+  restaurant-net:
+    driver: bridge

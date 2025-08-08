@@ -1,0 +1,40 @@
+# Development configuration
+keys:
+  devkey: secret
+
+# Network settings
+port: 7880
+bind_addresses:
+  - ""
+
+# WebSocket settings
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+
+turn:
+  enabled: false # TURN is not enabled in development mode
+
+# Room settings
+room:
+  auto_create: true
+  max_participants: 10
+  empty_timeout: 300
+  departure_timeout: 20
+
+# Webhook settings (for your backend integration)
+webhook:
+  api_key: devkey
+  urls:
+    - http://backend:8000/webhook
+
+# Logging
+logging:
+  level: info
+  pion_level: warn
+
+
+# Development mode settings
+development: true
